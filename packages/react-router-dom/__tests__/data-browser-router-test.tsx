@@ -4057,6 +4057,81 @@ function testDomRouter(
         `);
       });
 
+      it("handles fetcher.load errors with error state (defer)", async () => {
+        let dfd = createDeferred();
+        let router = createTestRouter(
+          createRoutesFromElements(
+            <Route
+              path="/"
+              element={<Comp />}
+              errorElement={<ErrorElement />}
+              loader={() => defer({ value: dfd.promise })}
+            />
+          ),
+          {
+            window: getWindow("/"),
+            hydrationData: { loaderData: { "0": null } },
+          }
+        );
+        let { container } = render(<RouterProvider router={router} />);
+
+        function Comp() {
+          let fetcher = useFetcher({
+            handleErrorState: true,
+          });
+          return (
+            <>
+              <p>
+                {fetcher.state}
+                {fetcher.data ? JSON.stringify(fetcher.data.value) : null}
+              </p>
+              <button onClick={() => fetcher.load("/")}>load</button>
+            </>
+          );
+        }
+
+        function ErrorElement() {
+          let error = useRouteError() as Error;
+          return <p>{error.message}</p>;
+        }
+
+        expect(getHtml(container)).toMatchInlineSnapshot(`
+          "<div>
+            <p>
+              idle
+            </p>
+            <button>
+              load
+            </button>
+          </div>"
+        `);
+
+        fireEvent.click(screen.getByText("load"));
+        expect(getHtml(container)).toMatchInlineSnapshot(`
+          "<div>
+            <p>
+              loading
+            </p>
+            <button>
+              load
+            </button>
+          </div>"
+        `);
+
+        dfd.reject(new Error("Kaboom!"));
+        await waitFor(() => screen.getByText("error"));
+        expect(getHtml(container)).toMatchInlineSnapshot(`
+          "<div>
+            <p>
+              error
+            </p>
+            <button>
+              load
+            </button>
+          </div>"
+        `);
+      });
+
       it("handles fetcher.submit errors", async () => {
         let router = createTestRouter(
           createRoutesFromElements(
