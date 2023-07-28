@@ -1217,11 +1217,17 @@ export type FetcherWithComponents<TData> = Fetcher<TData> & {
   load: (href: string) => void;
 };
 
+export type FetcherOptions = {
+  handleErrorState?: boolean;
+};
+
 /**
  * Interacts with route loaders and actions without causing a navigation. Great
  * for any interaction that stays on the same page.
  */
-export function useFetcher<TData = any>(): FetcherWithComponents<TData> {
+export function useFetcher<TData = any>(
+  options?: FetcherOptions
+): FetcherWithComponents<TData> {
   let { router } = useDataRouterContext(DataRouterHook.UseFetcher);
 
   let route = React.useContext(RouteContext);
@@ -1241,7 +1247,9 @@ export function useFetcher<TData = any>(): FetcherWithComponents<TData> {
   let [load] = React.useState(() => (href: string) => {
     invariant(router, "No router available for fetcher.load()");
     invariant(routeId, "No routeId available for fetcher.load()");
-    router.fetch(fetcherKey, routeId, href);
+    router.fetch(fetcherKey, routeId, href, {
+      handleErrorState: options?.handleErrorState,
+    });
   });
   let submit = useSubmitFetcher(fetcherKey, routeId);
 

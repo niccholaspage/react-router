@@ -3912,6 +3912,81 @@ function testDomRouter(
         `);
       });
 
+      it("handles fetcher.load errors with error state", async () => {
+        let router = createTestRouter(
+          createRoutesFromElements(
+            <Route
+              path="/"
+              element={<Comp />}
+              errorElement={<ErrorElement />}
+              loader={async () => {
+                throw new Error("Kaboom!");
+              }}
+            />
+          ),
+          {
+            window: getWindow("/"),
+            hydrationData: { loaderData: { "0": null } },
+          }
+        );
+        let { container } = render(<RouterProvider router={router} />);
+
+        function Comp() {
+          let fetcher = useFetcher({
+            handleErrorState: true,
+          });
+          return (
+            <>
+              <p>
+                {fetcher.state}
+                {fetcher.data ? JSON.stringify(fetcher.data) : null}
+              </p>
+              <button onClick={() => fetcher.load("/")}>load</button>
+            </>
+          );
+        }
+
+        function ErrorElement() {
+          let error = useRouteError() as Error;
+          return <p>{error.message}</p>;
+        }
+
+        expect(getHtml(container)).toMatchInlineSnapshot(`
+          "<div>
+            <p>
+              idle
+            </p>
+            <button>
+              load
+            </button>
+          </div>"
+        `);
+
+        fireEvent.click(screen.getByText("load"));
+        expect(getHtml(container)).toMatchInlineSnapshot(`
+          "<div>
+            <p>
+              loading
+            </p>
+            <button>
+              load
+            </button>
+          </div>"
+        `);
+
+        await waitFor(() => screen.getByText("error"));
+        expect(getHtml(container)).toMatchInlineSnapshot(`
+          "<div>
+            <p>
+              error
+            </p>
+            <button>
+              load
+            </button>
+          </div>"
+        `);
+      });
+
       it("handles fetcher.load errors (defer)", async () => {
         let dfd = createDeferred();
         let router = createTestRouter(

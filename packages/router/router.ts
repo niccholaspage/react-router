@@ -423,6 +423,7 @@ export type RelativeRoutingType = "route" | "path";
 type BaseNavigateOrFetchOptions = {
   preventScrollReset?: boolean;
   relative?: RelativeRoutingType;
+  handleErrorState?: boolean;
 };
 
 // Only allowed for navigations
@@ -547,6 +548,17 @@ type FetcherStates<TData = any> = {
     text: Submission["text"];
     formData: Submission["formData"];
     json: Submission["json"];
+    data: TData | undefined;
+    " _hasFetcherDoneAnything "?: boolean;
+  };
+  Error: {
+    state: "error";
+    formMethod: undefined;
+    formAction: undefined;
+    formEncType: undefined;
+    text: undefined;
+    formData: undefined;
+    json: undefined;
     data: TData | undefined;
     " _hasFetcherDoneAnything "?: boolean;
   };
@@ -1706,7 +1718,15 @@ export function createRouter(init: RouterInit): Router {
     // Store off the match so we can call it's shouldRevalidate on subsequent
     // revalidations
     fetchLoadMatches.set(key, { routeId, path });
-    handleFetcherLoader(key, routeId, path, match, matches, submission);
+    handleFetcherLoader(
+      key,
+      routeId,
+      path,
+      match,
+      matches,
+      submission,
+      opts?.handleErrorState
+    );
   }
 
   // Call the action for the matched fetcher.submit(), and then handle redirects,
@@ -1971,7 +1991,8 @@ export function createRouter(init: RouterInit): Router {
     path: string,
     match: AgnosticDataRouteMatch,
     matches: AgnosticDataRouteMatch[],
-    submission?: Submission
+    submission?: Submission,
+    handleErrorState?: boolean
   ) {
     let existingFetcher = state.fetchers.get(key);
     // Put this fetcher into it's loading state
@@ -2040,6 +2061,13 @@ export function createRouter(init: RouterInit): Router {
 
     // Process any non-redirect errors thrown
     if (isErrorResult(result)) {
+      if (handleErrorState) {
+        let errorFetcher = getErrorFetcher(undefined);
+        state.fetchers.set(key, errorFetcher);
+        updateState({ fetchers: new Map(state.fetchers) });
+        return;
+      }
+
       let boundaryMatch = findNearestBoundary(state.matches, routeId);
       state.fetchers.delete(key);
       // TODO: In remix, this would reset to IDLE_NAVIGATION if it was a catch -
@@ -4489,6 +4517,21 @@ function getSubmittingFetcher(
 function getDoneFetcher(data: Fetcher["data"]): FetcherStates["Idle"] {
   let fetcher: FetcherStates["Idle"] = {
     state: "idle",
+    formMethod: undefined,
+    formAction: undefined,
+    formEncType: undefined,
+    formData: undefined,
+    json: undefined,
+    text: undefined,
+    data,
+    " _hasFetcherDoneAnything ": true,
+  };
+  return fetcher;
+}
+
+function getErrorFetcher(data: Fetcher["data"]): FetcherStates["Error"] {
+  let fetcher: FetcherStates["Error"] = {
+    state: "error",
     formMethod: undefined,
     formAction: undefined,
     formEncType: undefined,
